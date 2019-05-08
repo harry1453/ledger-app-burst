@@ -1,0 +1,4 @@
+C:\Users\Harry\AppData\Local\JetBrains\Toolbox\apps\CLion\ch-0\182.4505.18\bin\cmake\win\bin\cmake.exe -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - NMake Makefiles" C:\Users\Harry\Ubuntu\ledger-app-burst
+-- Configuring done
+-- Generating done
+-- Build files have been written to: C:/Users/Harry/Ubuntu/ledger-app-burst/cmake-build-debug
