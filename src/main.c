@@ -64,9 +64,12 @@ static char lineBuffer[50];
 static cx_sha256_t hash;
 
 typedef struct signingContext_t {
-    unsigned char m[32];
+    unsigned char sharedKey[32];
+    unsigned char messageHash[32];
+    unsigned char h[32];
+    unsigned char v[32];
     unsigned char x[32];
-    unsigned char r[32];
+    unsigned char y[32];
 } messageSigningContext_t;
 
 messageSigningContext_t signingContext;
@@ -430,41 +433,40 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
     cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL);
     if (G_io_apdu_buffer[2] == P1_LAST) {
         // Hash is finalized, send back the signature
-        unsigned char result[32];
-        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer, 0, result);
-        cx_ecfp_private_key_t signingKey;
-        os_memmove(&signingKey, &N_privateKey,
-                   sizeof(cx_ecfp_private_key_t));
 
-        signingKey.curve = CX_CURVE_Curve25519;
-        signingKey.d_len = 32;
+        // TODO support for longer messages
 
-        // m = hash(Z, message)
-        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer, 0, signingContext.m);
+        // Get privateKey
+        unsigned char privateKey[] = {10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-        // x = hash(m, s)
+        // Get sharedKey
+        keygen25519(NULL, signingContext.sharedKey, privateKey);
+
+        // Get messageHash
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.m, 32, NULL);
-        cx_hash(&hash.header, CX_LAST, signingKey.d, 32, signingContext.x);
+        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], signingContext.messageHash);
 
-        // keygen25519(Y, NULL, x);
-        // reuse G_io_apdu_buffer = Y to save some memory.
-        keygen25519(G_io_apdu_buffer, NULL, signingContext.x);
-
-        // r = hash(m+Y);
+        // Get x = hash(messageHash, sharedKey)
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.m, 32, NULL);
-        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer, 32, signingContext.r);
+        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL);
+        cx_hash(&hash.header, CX_LAST, signingContext.sharedKey, 32, signingContext.x);
 
-        // output (v,r) as the signature
-        // put v into G_io_apdu_buffer first, followed by r
-        //int sign25519(k25519 v, const k25519 h, const priv25519 x, const spriv25519 s)
-        sign25519(G_io_apdu_buffer, signingContext.r, signingContext.x, signingKey.d);
-        os_memcpy(G_io_apdu_buffer+32, signingContext.r, 32);
+        // get y, keygen25519(Y, NULL, x);
+        keygen25519(signingContext.y, NULL, signingContext.x);
+
+        // h = hash(messageHash, y);
+        cx_sha256_init(&hash);
+        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL);
+        cx_hash(&hash.header, CX_LAST, signingContext.y, 32, signingContext.h);
+
+        // sign25519(v, h, x, sharedKey);
+        sign25519(signingContext.v, signingContext.h, signingContext.x, signingContext.sharedKey);
+        os_memcpy(G_io_apdu_buffer, signingContext.v, 32); // TODO you could just sign into this...
+        os_memcpy(G_io_apdu_buffer+32, signingContext.h, 32);
 
         // return 64 bytes to host
         tx=64;
-        G_io_apdu_buffer[0] &= 0xF0; // discard the parity information
+        //G_io_apdu_buffer[0] &= 0xF0; // discard the parity information
         hashTainted = 1;
     }
     G_io_apdu_buffer[tx++] = 0x90;
@@ -573,8 +575,8 @@ static void sample_main(void) {
                 case INS_GET_PUBLIC_KEY: {
                     cx_ecfp_public_key_t publicKey;
                     cx_ecfp_private_key_t privateKey;
-                    os_memmove(&privateKey, &N_privateKey,
-                               sizeof(cx_ecfp_private_key_t));
+                    char privateKey2[] = {10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                    os_memmove(&privateKey.d, &privateKey2, 32);
                     keygen25519(publicKey.W, NULL, privateKey.d);
                     os_memmove(G_io_apdu_buffer, publicKey.W, 32);
                     tx = 32;

@@ -20,11 +20,13 @@ from ledgerblue.commException import CommException
 import codecs
 
 textToSign = ""
-while True:
-    data = input("Enter text to sign, end with an empty line : ")
-    if len(data) == 0:
-        break
-    textToSign += data + "\n"
+#while True:
+#    data = input("Enter text to sign, end with an empty line : ")
+#    if len(data) == 0:
+#        break
+#    textToSign += data + "\n"
+textToSign = input("Enter text: ")
+print("textToSign: " + textToSign)
 
 dongle = getDongle(True)
 publicKey = dongle.exchange(codecs.decode("8004000000", "hex"))
@@ -32,19 +34,19 @@ print("publicKey " + str(codecs.encode(publicKey, "hex")))
 try:
     offset = 0
     while offset != len(textToSign):
-        if (len(textToSign) - offset) > 255:
-            chunk = textToSign[offset: offset + 255]
-        else:
-            chunk = textToSign[offset:]
+        if (len(textToSign) - offset) > 255: # if we cannot send everything that is left
+            chunk = textToSign[offset: offset + 255] # take next chunk
+        else: # we can send everything left
+            chunk = textToSign[offset:] # take everything left
         if (offset + len(chunk)) == len(textToSign):
-            p1 = 0x80
+            p1 = "80" # final chunk
         else:
-            p1 = 0x00
+            p1 = "00" # not final chunk
         apdu = "8002"
-        apdu += codecs.encode(chr(p1).encode(), "hex")[2:].decode()
-        apdu += codecs.encode(chr(0x00).encode(), "hex")[2:].decode()
-        apdu += codecs.encode(chr(len(chunk)).encode(), "hex")[2:].decode()
-        apdu += codecs.encode(chunk.encode("utf-8"), "hex")[2:].decode()
+        apdu += p1
+        apdu += codecs.encode(chr(0x00).encode(), "hex").decode()
+        apdu += codecs.encode(chr(len(chunk)).encode(), "hex").decode()
+        apdu += codecs.encode(chunk.encode("utf-8"), "hex").decode()
         signature = dongle.exchange(codecs.decode(apdu, "hex"))
         offset += len(chunk)
         print("signature " + str(codecs.encode(signature, "hex")))

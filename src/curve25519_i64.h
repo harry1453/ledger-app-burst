@@ -73,7 +73,7 @@ int sign25519(k25519 v, const k25519 h, const priv25519 x, const spriv25519 s);
  *   h  [in]  signature hash
  *   P  [in]  public key
  */
-void verify25519(pub25519 Y, const k25519 v, const k25519 h, const pub25519 P);
+//void verify25519(pub25519 Y, const k25519 v, const k25519 h, const pub25519 P);
 
 
 #endif

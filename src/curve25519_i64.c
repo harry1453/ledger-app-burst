@@ -49,7 +49,7 @@ base_r2y = { 5744, 8160848, 4790893, 13779497, 35730846,
 
 /********************* radix 2^8 math *********************/
 
-static void cpy32(k25519 d, const k25519 s) {
+static inline void cpy32(k25519 d, const k25519 s) {
 	int i;
 	for (i = 0; i < 32; i++) d[i] = s[i];
 }
@@ -71,7 +71,7 @@ int mula_small(dstptr p, srcptr q, unsigned m, srcptr x, unsigned n, int z) {
 /* p += x * y * z  where z is a small integer
  * x is size 32, y is size t, p is size 32+t
  * y is allowed to overlap with p+32 if you don't care about the upper half  */
-static int mula32(dstptr p, srcptr x, srcptr y, unsigned t, int z) {
+static inline int mula32(dstptr p, srcptr x, srcptr y, unsigned t, int z) {
 	const unsigned n = 31;
 	int w = 0;
 	unsigned i;
@@ -89,7 +89,7 @@ static int mula32(dstptr p, srcptr x, srcptr y, unsigned t, int z) {
  * requires t > 0 && d[t-1] != 0
  * requires that r[-1] and d[-1] are valid memory locations
  * q may overlap with r+t */
-static void divmod(dstptr q, dstptr r, unsigned n, srcptr d, unsigned t) {
+static inline void divmod(dstptr q, dstptr r, unsigned n, srcptr d, unsigned t) {
 	int rn = 0;
 	int dt = d[t-1] << 8 | (d[t-2] & -(t > 1));
 
@@ -115,7 +115,7 @@ static inline unsigned numsize(srcptr x, unsigned n) {
  * the inverse of a mod b, as 32-byte signed.
  * x and y must have 64 bytes space for temporary use.
  * requires that a[-1] and b[-1] are valid memory locations  */
-static dstptr egcd32(dstptr x, dstptr y, dstptr a, dstptr b) {
+static inline dstptr egcd32(dstptr x, dstptr y, dstptr a, dstptr b) {
 	unsigned an, bn = 32, qn, i;
 	for (i = 0; i < 32; i++)
 		x[i] = y[i] = 0;
@@ -179,7 +179,7 @@ static void check_reduced(const char *where, const i25519 x) {
 #define m64(arg1,arg2) ((int64_t) (arg1) * (arg2))
 
 /* Convert to internal format from little-endian byte format */
-static void unpack25519(i25519 x, const k25519 m) {
+static inline void unpack25519(i25519 x, const k25519 m) {
 	x[0] =  M( 0)         | M( 1)<<8 | M( 2)<<16 | (M( 3)& 3)<<24;
 	x[1] = (M( 3)&~ 3)>>2 | M( 4)<<6 | M( 5)<<14 | (M( 6)& 7)<<22;
 	x[2] = (M( 6)&~ 7)>>3 | M( 7)<<5 | M( 8)<<13 | (M( 9)&31)<<21;
@@ -207,7 +207,7 @@ static inline int is_overflow(const i25519 x) {
  *     unpack, mul, sqr
  *     set --  if input in range 0 .. P25
  * If you're unsure if the number is reduced, first multiply it by 1.  */
-static void pack25519(const i25519 x, k25519 m) {
+static inline void pack25519(const i25519 x, k25519 m) {
 	int32_t ld = 0, ud = 0;
 	int64_t t;
 	check_reduced("pack input", x);
@@ -233,14 +233,14 @@ static void pack25519(const i25519 x, k25519 m) {
 }
 
 /* Copy a number */
-static void cpy25519(i25519 out, const i25519 in) {
+static inline void cpy25519(i25519 out, const i25519 in) {
 	int i;
 	for (i = 0; i < 10; i++)
 		out[i] = in[i];
 }
 
 /* Set a number to value, which must be in range -185861411 .. 185861411 */
-static void set25519(i25519 out, const int32_t in) {
+static inline void set25519(i25519 out, const int32_t in) {
 	int i;
 	out[0] = in;
 	for (i = 1; i < 10; i++)
@@ -250,14 +250,14 @@ static void set25519(i25519 out, const int32_t in) {
 /* Add/subtract two numbers.  The inputs must be in reduced form, and the 
  * output isn't, so to do another addition or subtraction on the output, 
  * first multiply it by one to reduce it. */
-static void add25519(i25519 xy, const i25519 x, const i25519 y) {
+static inline void add25519(i25519 xy, const i25519 x, const i25519 y) {
 	xy[0] = x[0] + y[0];	xy[1] = x[1] + y[1];
 	xy[2] = x[2] + y[2];	xy[3] = x[3] + y[3];
 	xy[4] = x[4] + y[4];	xy[5] = x[5] + y[5];
 	xy[6] = x[6] + y[6];	xy[7] = x[7] + y[7];
 	xy[8] = x[8] + y[8];	xy[9] = x[9] + y[9];
 }
-static void sub25519(i25519 xy, const i25519 x, const i25519 y) {
+static inline void sub25519(i25519 xy, const i25519 x, const i25519 y) {
 	xy[0] = x[0] - y[0];	xy[1] = x[1] - y[1];
 	xy[2] = x[2] - y[2];	xy[3] = x[3] - y[3];
 	xy[4] = x[4] - y[4];	xy[5] = x[5] - y[5];
@@ -268,7 +268,7 @@ static void sub25519(i25519 xy, const i25519 x, const i25519 y) {
 /* Multiply a number by a small integer in range -185861411 .. 185861411.
  * The output is in reduced form, the input x need not be.  x and xy may point
  * to the same buffer. */
-static i25519ptr mul25519small(i25519 xy, const i25519 x, const int32_t y) {
+static inline i25519ptr mul25519small(i25519 xy, const i25519 x, const int32_t y) {
 	register int64_t t;
 	check_nonred("mul small x input", x);
 	check_range("mul small y input", y, -185861411, 185861411);
@@ -301,7 +301,7 @@ static i25519ptr mul25519small(i25519 xy, const i25519 x, const int32_t y) {
 
 /* Multiply two numbers.  The output is in reduced form, the inputs need not 
  * be. */
-static i25519ptr mul25519(i25519 xy, const i25519 x, const i25519 y) {
+static inline i25519ptr mul25519(i25519 xy, const i25519 x, const i25519 y) {
 	register int64_t t;
 	check_nonred("mul input x", x);
 	check_nonred("mul input y", y);
@@ -363,7 +363,7 @@ static i25519ptr mul25519(i25519 xy, const i25519 x, const i25519 y) {
 }
 
 /* Square a number.  Optimization of  mul25519(x2, x, x)  */
-static i25519ptr sqr25519(i25519 x2, const i25519 x) {
+static inline i25519ptr sqr25519(i25519 x2, const i25519 x) {
 	register int64_t t;
 	check_nonred("sqr input", x);
 	t = m64(x[4],x[4]) + 2 * (m64(x[0],x[8]) + m64(x[2],x[6])) + 38 *
@@ -410,7 +410,7 @@ static i25519ptr sqr25519(i25519 x2, const i25519 x) {
 /* Calculates a reciprocal.  The output is in reduced form, the inputs need not 
  * be.  Simply calculates  y = x^(p-2)  so it's not too fast. */
 /* When sqrtassist is true, it instead calculates y = x^((p-5)/8) */
-static void recip25519(i25519 y, const i25519 x, int sqrtassist) {
+static inline void recip25519(i25519 y, const i25519 x, int sqrtassist) {
 	i25519 t0, t1, t2, t3, t4;
 	int i;
 	/* the chain for x^(2^255-21) is straight from djb's implementation */
@@ -539,7 +539,7 @@ static inline void x_to_y2(i25519 t, i25519 y2, const i25519 x) {
 }
 
 /* P = kG   and  s = sign(P)/k  */
-void core25519(k25519 Px, k25519 s, const k25519 k, const k25519 Gx) {
+inline void core25519(k25519 Px, k25519 s, const k25519 k, const k25519 Gx) {
 	i25519 dx, x[2], z[2], t1, t2, t3, t4;
 	unsigned i, j;
 
@@ -611,7 +611,7 @@ void core25519(k25519 Px, k25519 s, const k25519 k, const k25519 Gx) {
 }
 
 /* v = (x - h) s  mod q  */
-int sign25519(k25519 v, const k25519 h, const priv25519 x, const spriv25519 s) {
+inline int sign25519(k25519 v, const k25519 h, const priv25519 x, const spriv25519 s) {
 	uint8_t tmp[65];
 	unsigned w;
 	int i;
