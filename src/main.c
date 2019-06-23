@@ -67,7 +67,6 @@ typedef struct signingContext_t {
     unsigned char sharedKey[32];
     unsigned char messageHash[32];
     unsigned char h[32];
-    unsigned char v[32];
     unsigned char x[32];
     unsigned char y[32];
 } messageSigningContext_t;
@@ -460,13 +459,11 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
         cx_hash(&hash.header, CX_LAST, signingContext.y, 32, signingContext.h);
 
         // sign25519(v, h, x, sharedKey);
-        sign25519(signingContext.v, signingContext.h, signingContext.x, signingContext.sharedKey);
-        os_memcpy(G_io_apdu_buffer, signingContext.v, 32); // TODO you could just sign into this...
+        sign25519(G_io_apdu_buffer, signingContext.h, signingContext.x, signingContext.sharedKey);
         os_memcpy(G_io_apdu_buffer+32, signingContext.h, 32);
 
         // return 64 bytes to host
         tx=64;
-        //G_io_apdu_buffer[0] &= 0xF0; // discard the parity information
         hashTainted = 1;
     }
     G_io_apdu_buffer[tx++] = 0x90;

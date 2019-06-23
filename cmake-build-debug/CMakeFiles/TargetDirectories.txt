@@ -1,3 +1,0 @@
-C:/Users/Harry/Ubuntu/ledger-app-burst/cmake-build-debug/CMakeFiles/ledger_app_burst.dir
-C:/Users/Harry/Ubuntu/ledger-app-burst/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/Harry/Ubuntu/ledger-app-burst/cmake-build-debug/CMakeFiles/rebuild_cache.dir
