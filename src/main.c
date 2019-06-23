@@ -54,7 +54,7 @@ static void ui_approval(void);
 #define INS_GET_PUBLIC_KEY 0x04
 #define P1_LAST 0x80
 #define P1_MORE 0x00
-#define RESP_OK 0x51
+#define RESP_OK 0x4b
 
 // private key in flash. const and N_ variable name are mandatory here
 static const cx_ecfp_private_key_t N_privateKey;
