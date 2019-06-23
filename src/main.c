@@ -65,14 +65,41 @@ static char lineBuffer[50];
 static cx_sha256_t hash;
 
 typedef struct signingContext_t {
+    unsigned char lastIndex;
+    unsigned char privateKey[32];
     unsigned char sharedKey[32];
-    unsigned char messageHash[32];
+    unsigned char publicKey[32];
     unsigned char h[32];
+    unsigned char m[32];
     unsigned char x[32];
     unsigned char y[32];
 } messageSigningContext_t;
 
 messageSigningContext_t signingContext;
+
+void getKeys() {
+    if (!os_global_pin_is_validated()) {
+        return;
+    }
+
+    unsigned char newIndex = G_io_apdu_buffer[3];
+    if (signingContext.lastIndex == newIndex) {
+        return;
+    }
+
+    signingContext.lastIndex = newIndex;
+
+    // BURST keypath of 44'/30'/0'/0'/index'
+    uint32_t purpose = 44; // BIP 44
+    uint32_t coinType = 30; // Burstcoin
+    uint32_t account = 0;
+    uint32_t change = 0; // External chain
+    uint32_t index = signingContext.lastIndex;
+    uint32_t path[] = {purpose | 0x80000000, coinType | 0x80000000, account | 0x80000000, change | 0x80000000, index | 0x80000000};
+
+    os_perso_derive_node_bip32(CX_CURVE_Ed25519, path, 5, signingContext.privateKey, NULL);
+    keygen25519(signingContext.publicKey, signingContext.sharedKey, signingContext.privateKey);
+}
 
 #ifdef TARGET_BLUE
 
@@ -432,29 +459,26 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
     if (G_io_apdu_buffer[2] == P1_LAST) {
         // Hash is finalized, send back the signature
 
-        // Get privateKey
-        unsigned char privateKey[] = {10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        // Get keys
+        getKeys();
 
-        // Get sharedKey
-        keygen25519(NULL, signingContext.sharedKey, privateKey);
+        // Get m (messageHash)
+        cx_hash(&hash.header, CX_LAST, NULL, 0, signingContext.m, 32);
 
-        // Get messageHash
-        cx_hash(&hash.header, CX_LAST, NULL, 0, signingContext.messageHash, 32);
-
-        // Get x = hash(messageHash, sharedKey)
+        // Get x = hash(m, s)
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL, 0);
-        cx_hash(&hash.header, CX_LAST, signingContext.sharedKey, 32, signingContext.x, 32);
+        cx_hash(&hash.header, 0, signingContext.m, 32, NULL, 0);
+        cx_hash(&hash.header, CX_LAST, signingContext.m, 32, signingContext.x, 32);
 
-        // get y, keygen25519(Y, NULL, x);
+        // get y through keygen25519(y, NULL, x);
         keygen25519(signingContext.y, NULL, signingContext.x);
 
-        // h = hash(messageHash, y);
+        // h = hash(m, y);
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL, 0);
+        cx_hash(&hash.header, 0, signingContext.m, 32, NULL, 0);
         cx_hash(&hash.header, CX_LAST, signingContext.y, 32, signingContext.h, 32);
 
-        // sign25519(v, h, x, sharedKey);
+        // sign25519(v, h, x, s);
         sign25519(G_io_apdu_buffer, signingContext.h, signingContext.x, signingContext.sharedKey);
         os_memcpy(G_io_apdu_buffer+32, signingContext.h, 32);
 
@@ -577,12 +601,8 @@ static void sample_main(void) {
                 } break;
 
                 case INS_GET_PUBLIC_KEY: {
-                    cx_ecfp_public_key_t publicKey;
-                    cx_ecfp_private_key_t privateKey;
-                    char privateKey2[] = {10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-                    os_memmove(&privateKey.d, &privateKey2, 32);
-                    keygen25519(publicKey.W, NULL, privateKey.d);
-                    os_memmove(G_io_apdu_buffer, publicKey.W, 32);
+                    getKeys();
+                    os_memcpy(G_io_apdu_buffer, signingContext.publicKey, 32);
                     tx = 32;
                     THROW(0x9000);
                 } break;

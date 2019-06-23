@@ -19,6 +19,7 @@ from ledgerblue.comm import getDongle
 from ledgerblue.commException import CommException
 import codecs
 
+index = ""
 textToSign = ""
 #while True:
 #    data = input("Enter text to sign, end with an empty line : ")
@@ -26,10 +27,14 @@ textToSign = ""
 #        break
 #    textToSign += data + "\n"
 textToSign = input("Enter text: ")
+index = hex(int(input("account index: ")))[2:4]
+if len(index) % 2 == 1:
+    index = "0" + index
 print("textToSign: " + textToSign)
+print("index: " + index)
 
 dongle = getDongle(True)
-publicKey = dongle.exchange(codecs.decode("8004000000", "hex"))
+publicKey = dongle.exchange(codecs.decode("800400"+index+"00", "hex"))
 print("publicKey " + str(codecs.encode(publicKey, "hex")))
 try:
     offset = 0
@@ -44,8 +49,11 @@ try:
             p1 = "00" # not final chunk
         apdu = "8002"
         apdu += p1
-        apdu += codecs.encode(chr(0x00).encode(), "hex").decode()
-        apdu += hex(len(chunk))[2:]
+        apdu += index
+        length = hex(len(chunk))[2:]
+        if len(length) % 2 == 1:
+            length = "0" + length
+        apdu += length
         apdu += codecs.encode(chunk.encode("utf-8"), "hex").decode()
         signature = dongle.exchange(codecs.decode(apdu, "hex"))
         offset += len(chunk)
