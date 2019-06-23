@@ -429,7 +429,7 @@ static const bagl_element_t*
 io_seproxyhal_touch_approve(const bagl_element_t *e) {
     unsigned int tx = 0;
     // Update the hash
-    cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL);
+    cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL, 0);
     if (G_io_apdu_buffer[2] == P1_LAST) {
         // Hash is finalized, send back the signature
 
@@ -443,20 +443,20 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
 
         // Get messageHash
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], signingContext.messageHash);
+        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], signingContext.messageHash, 32);
 
         // Get x = hash(messageHash, sharedKey)
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL);
-        cx_hash(&hash.header, CX_LAST, signingContext.sharedKey, 32, signingContext.x);
+        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL, 0);
+        cx_hash(&hash.header, CX_LAST, signingContext.sharedKey, 32, signingContext.x, 32);
 
         // get y, keygen25519(Y, NULL, x);
         keygen25519(signingContext.y, NULL, signingContext.x);
 
         // h = hash(messageHash, y);
         cx_sha256_init(&hash);
-        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL);
-        cx_hash(&hash.header, CX_LAST, signingContext.y, 32, signingContext.h);
+        cx_hash(&hash.header, 0, signingContext.messageHash, 32, NULL, 0);
+        cx_hash(&hash.header, CX_LAST, signingContext.y, 32, signingContext.h, 32);
 
         // sign25519(v, h, x, sharedKey);
         sign25519(G_io_apdu_buffer, signingContext.h, signingContext.x, signingContext.sharedKey);
