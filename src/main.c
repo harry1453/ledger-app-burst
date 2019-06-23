@@ -54,6 +54,7 @@ static void ui_approval(void);
 #define INS_GET_PUBLIC_KEY 0x04
 #define P1_LAST 0x80
 #define P1_MORE 0x00
+#define RESP_OK 0x51
 
 // private key in flash. const and N_ variable name are mandatory here
 static const cx_ecfp_private_key_t N_privateKey;
@@ -428,12 +429,8 @@ static const bagl_element_t *io_seproxyhal_touch_exit(const bagl_element_t *e) {
 static const bagl_element_t*
 io_seproxyhal_touch_approve(const bagl_element_t *e) {
     unsigned int tx = 0;
-    // Update the hash
-    cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL, 0);
     if (G_io_apdu_buffer[2] == P1_LAST) {
         // Hash is finalized, send back the signature
-
-        // TODO support for longer messages
 
         // Get privateKey
         unsigned char privateKey[] = {10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -442,8 +439,7 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
         keygen25519(NULL, signingContext.sharedKey, privateKey);
 
         // Get messageHash
-        cx_sha256_init(&hash);
-        cx_hash(&hash.header, CX_LAST, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], signingContext.messageHash, 32);
+        cx_hash(&hash.header, CX_LAST, NULL, 0, signingContext.messageHash, 32);
 
         // Get x = hash(messageHash, sharedKey)
         cx_sha256_init(&hash);
@@ -554,19 +550,30 @@ static void sample_main(void) {
                         (G_io_apdu_buffer[2] != P1_LAST)) {
                         THROW(0x6A86);
                     }
+
                     if (hashTainted) {
                         cx_sha256_init(&hash);
                         hashTainted = 0;
                     }
-                    // Wait for the UI to be completed
-                    current_text_pos = 0;
-                    text_y = 60;
-                    G_io_apdu_buffer[5 + G_io_apdu_buffer[4]] = '\0';
 
-                    display_text_part();
-                    ui_text();
+                    // Update the hash
+                    cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL, 0);
 
-                    flags |= IO_ASYNCH_REPLY;
+                    if (G_io_apdu_buffer[2] == P1_LAST) {
+                        // Wait for the UI to be completed
+                        current_text_pos = 0;
+                        text_y = 60;
+                        G_io_apdu_buffer[5 + G_io_apdu_buffer[4]] = '\0';
+
+                        display_text_part();
+                        ui_text();
+
+                        flags |= IO_ASYNCH_REPLY;
+                    } else {
+                        G_io_apdu_buffer[1] = RESP_OK;
+                        tx = 1;
+                        THROW(0x9000);
+                    }
                 } break;
 
                 case INS_GET_PUBLIC_KEY: {

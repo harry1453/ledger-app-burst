@@ -45,11 +45,14 @@ try:
         apdu = "8002"
         apdu += p1
         apdu += codecs.encode(chr(0x00).encode(), "hex").decode()
-        apdu += codecs.encode(chr(len(chunk)).encode(), "hex").decode()
+        apdu += hex(len(chunk))[2:]
         apdu += codecs.encode(chunk.encode("utf-8"), "hex").decode()
         signature = dongle.exchange(codecs.decode(apdu, "hex"))
         offset += len(chunk)
-        print("signature " + str(codecs.encode(signature, "hex")))
+        if p1 == "80":
+            print("signature " + str(codecs.encode(signature, "hex")))
+        else:
+            print("delivered a chunk.")
 # publicKey = PublicKey(bytes(publicKey), raw=True)
 # signature = publicKey.ecdsa_deserialize(bytes(signature))
 # print("verified " + str(publicKey.ecdsa_verify(bytes(textToSign), signature)))
