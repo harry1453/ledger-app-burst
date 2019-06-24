@@ -22,8 +22,9 @@ include $(BOLOS_SDK)/Makefile.defines
 
 # Main app configuration
 
-APPNAME = "Sample Sign"
+APPNAME = "Burstcoin"
 APPVERSION = 1.0.0
+ICONNAME = nanos_app_burst.gif
 APP_LOAD_PARAMS = --appFlags 0x00 $(COMMON_LOAD_PARAMS)
 
 # Build configuration
