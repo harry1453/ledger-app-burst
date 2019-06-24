@@ -26,14 +26,7 @@
 
 unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 
-static unsigned int current_text_pos; // parsing cursor in the text to display
-static unsigned int text_y;           // current location of the displayed text
 static unsigned char hashTainted;     // notification to restart the hash
-
-// UI currently displayed
-enum UI_STATE { UI_IDLE, UI_APPROVAL };
-
-enum UI_STATE uiState;
 
 ux_state_t ux;
 
@@ -228,8 +221,7 @@ const bagl_element_t ui_verify[] = {
                 NULL,
                 NULL,
                 NULL},
-        {{BAGL_LABELINE, 0x04, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
-                                                                       BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+        {{BAGL_LABELINE, 0x04, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
                 signingContext.feesAmount,
                 0,
                 0,
@@ -354,12 +346,10 @@ const bagl_element_t * ui_verify_prepro(const bagl_element_t *element) {
 }
 
 static void showIdleUI(void) {
-    uiState = UI_IDLE;
     UX_MENU_DISPLAY(0, menu_main, NULL);
 }
 
 static void showVerifyUI(void) {
-    uiState = UI_APPROVAL;
     ux_step = 0;
     ux_step_count = 4;
     UX_DISPLAY(ui_verify, ui_verify_prepro);
@@ -431,13 +421,8 @@ static void sample_main(void) {
                     cx_hash(&hash.header, 0, G_io_apdu_buffer + 5, G_io_apdu_buffer[4], NULL, 0);
 
                     if (G_io_apdu_buffer[2] == P1_LAST) {
-                        // Wait for the UI to be completed
-                        current_text_pos = 0;
-                        text_y = 60;
                         G_io_apdu_buffer[5 + G_io_apdu_buffer[4]] = '\0';
-
                         showVerifyUI();
-
                         flags |= IO_ASYNCH_REPLY;
                     } else {
                         G_io_apdu_buffer[1] = RESP_OK;
@@ -534,10 +519,7 @@ __attribute__((section(".boot"))) int main(void) {
     // exit critical section
     __asm volatile("cpsie i");
 
-    current_text_pos = 0;
-    text_y = 60;
     hashTainted = 1;
-    uiState = UI_IDLE;
 
     // ensure exception will work as planned
     os_boot();
