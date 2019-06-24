@@ -20,6 +20,7 @@
 #include "curve25519_i64.h"
 
 #include "os_io_seproxyhal.h"
+#include "rs_address.h"
 
 unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 
@@ -28,7 +29,7 @@ static unsigned int text_y;           // current location of the displayed text
 static unsigned char hashTainted;     // notification to restart the hash
 
 // UI currently displayed
-enum UI_STATE { UI_IDLE, UI_TEXT, UI_APPROVAL };
+enum UI_STATE { UI_IDLE, UI_APPROVAL };
 
 enum UI_STATE uiState;
 
@@ -38,16 +39,7 @@ static const bagl_element_t *io_seproxyhal_touch_exit(const bagl_element_t *e);
 static const bagl_element_t*
 io_seproxyhal_touch_approve(const bagl_element_t *e);
 static const bagl_element_t *io_seproxyhal_touch_deny(const bagl_element_t *e);
-
-static void ui_idle(void);
-static unsigned char display_text_part(void);
-static void ui_text(void);
-static void ui_approval(void);
-
-#define MAX_CHARS_PER_LINE 49
-#define DEFAULT_FONT BAGL_FONT_OPEN_SANS_LIGHT_16px | BAGL_FONT_ALIGNMENT_LEFT
-#define TEXT_HEIGHT 15
-#define TEXT_SPACE 4
+static void showIdleUI();
 
 #define CLA 0x80
 #define INS_SIGN 0x02
@@ -56,10 +48,14 @@ static void ui_approval(void);
 #define P1_MORE 0x00
 #define RESP_OK 0x4b
 
-static char lineBuffer[50];
+#define ERR_NOT_LONG_ENOUGH 0x6464
+
 static cx_sha256_t hash;
 
 typedef struct signingContext_t {
+    unsigned char feesAmount[32];
+    unsigned char transactionAmount[32];
+    unsigned char recipientRs[32];
     unsigned char lastIndex;
     unsigned char privateKey[32];
     unsigned char sharedKey[32];
@@ -69,6 +65,9 @@ typedef struct signingContext_t {
     unsigned char x[32];
     unsigned char y[32];
 } messageSigningContext_t;
+
+static int ux_step;
+static int ux_step_count;
 
 static messageSigningContext_t signingContext;
 
@@ -96,62 +95,146 @@ void getKeys() {
     keygen25519(signingContext.publicKey, signingContext.sharedKey, signingContext.privateKey);
 }
 
+static void printAmount(uint64_t amount, unsigned char *out, uint8_t len) {
+    char buffer[len];
+    uint64_t dVal = amount;
+    int i, j;
+
+    os_memset(buffer, 0, len);
+    for (i = 0; dVal > 0 || i < 9; i++) {
+        if (dVal > 0) {
+            buffer[i] = (dVal % 10) + '0';
+            dVal /= 10;
+        } else {
+            buffer[i] = '0';
+        }
+        if (i == 7) { // 1 BURST = 100000000 quants
+            i += 1;
+            buffer[i] = '.';
+        }
+        if (i >= len) {
+            THROW(0x6700);
+        }
+    }
+    // reverse order
+    for (i -= 1, j = 0; i >= 0 && j < len-1; i--, j++) {
+        out[j] = buffer[i];
+    }
+    // strip trailing 0s
+    for (j -= 1; j > 0; j--) {
+        if (out[j] != '0') break;
+    }
+    j += 2;
+
+    // strip trailing .
+    //if (out[j-1] == '.') j -= 1;
+
+    out[j] = '\0';
+}
+
 const ux_menu_entry_t menu_main[] = { // TODO glyphs
         {NULL, NULL, 0, NULL, "Use wallet to", "view accounts", 33, 12},
         {NULL, NULL, 0, NULL, "Version", APPVERSION, 0, 0},
         {NULL, os_sched_exit, 0, NULL, "Quit app", NULL, 50, 29},
         UX_MENU_END};
 
-static const bagl_element_t bagl_ui_approval_nanos[] = {
-    {
-        {BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000,
-         0xFFFFFF, 0, 0},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_LABELINE, 0x02, 0, 12, 128, 11, 0, 0, 0, 0xFFFFFF, 0x000000,
-         BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
-        "Sign message",
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_ICON, 0x00, 3, 12, 7, 7, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
-         BAGL_GLYPH_ICON_CROSS},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_ICON, 0x00, 117, 13, 8, 6, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
-         BAGL_GLYPH_ICON_CHECK},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
+const bagl_element_t ui_verify[] = {
+        {{BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000, 0xFFFFFF, 0, 0},
+                NULL,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+
+        {{BAGL_ICON, 0x00, 3, 12, 7, 7, 0, 0, 0, 0xFFFFFF, 0x000000, 0, BAGL_GLYPH_ICON_CROSS},
+                NULL,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_ICON, 0x00, 117, 13, 8, 6, 0, 0, 0, 0xFFFFFF, 0x000000, 0, BAGL_GLYPH_ICON_CHECK},
+                NULL,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_LABELINE, 0x01, 0, 12, 128, 12, 0, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+                "Confirm",
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_LABELINE, 0x01, 0, 26, 128, 12, 0, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+                "transaction",
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+
+        {{BAGL_LABELINE, 0x02, 0, 12, 128, 12, 0, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+                "Amount",
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_LABELINE, 0x02, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+                signingContext.transactionAmount,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+
+        {{BAGL_LABELINE, 0x03, 0, 12, 128, 12, 0, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+                "Address",
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_LABELINE, 0x03, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+                signingContext.recipientRs,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+
+        {{BAGL_LABELINE, 0x04, 0, 12, 128, 12, 0, 0, 0, 0xFFFFFF, 0x000000, BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
+                "Fees",
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
+        {{BAGL_LABELINE, 0x04, 23, 26, 82, 12, 0x80 | 10, 0, 0, 0xFFFFFF, 0x000000,
+                                                                       BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
+                signingContext.feesAmount,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL},
 };
 
-static unsigned int
-bagl_ui_approval_nanos_button(unsigned int button_mask,
-                              unsigned int button_mask_counter) {
+static unsigned int ui_verify_button(unsigned int button_mask, unsigned int button_mask_counter) {
     switch (button_mask) {
     case BUTTON_EVT_RELEASED | BUTTON_RIGHT:
         io_seproxyhal_touch_approve(NULL);
@@ -162,89 +245,6 @@ bagl_ui_approval_nanos_button(unsigned int button_mask,
         break;
     }
     return 0;
-}
-
-static const bagl_element_t bagl_ui_text_review_nanos[] = {
-    {
-        {BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000,
-         0xFFFFFF, 0, 0},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_LABELINE, 0x02, 0, 12, 128, 11, 0, 0, 0, 0xFFFFFF, 0x000000,
-         BAGL_FONT_OPEN_SANS_REGULAR_11px | BAGL_FONT_ALIGNMENT_CENTER, 0},
-        "Verify text",
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_LABELINE, 0x02, 23, 26, 82, 11, 0x80 | 10, 0, 0, 0xFFFFFF,
-         0x000000, BAGL_FONT_OPEN_SANS_EXTRABOLD_11px | BAGL_FONT_ALIGNMENT_CENTER, 26},
-        lineBuffer,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_ICON, 0x00, 3, 12, 7, 7, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
-         BAGL_GLYPH_ICON_CROSS},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_ICON, 0x00, 117, 13, 8, 6, 0, 0, 0, 0xFFFFFF, 0x000000, 0,
-         BAGL_GLYPH_ICON_CHECK},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-};
-
-static unsigned int
-bagl_ui_text_review_nanos_button(unsigned int button_mask,
-                                 unsigned int button_mask_counter) {
-    switch (button_mask) {
-    case BUTTON_EVT_RELEASED | BUTTON_RIGHT:
-        if (!display_text_part()) {
-            ui_approval();
-        } else {
-            UX_REDISPLAY();
-        }
-        break;
-
-    case BUTTON_EVT_RELEASED | BUTTON_LEFT:
-        io_seproxyhal_touch_deny(NULL);
-        break;
-    }
-    return 0;
-}
-
-static const bagl_element_t *io_seproxyhal_touch_exit(const bagl_element_t *e) {
-    // Go back to the dashboard
-    os_sched_exit(0);
-    return NULL; // do not redraw the widget
 }
 
 static const bagl_element_t*
@@ -285,7 +285,7 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
     // Send back the response, do not restart the event loop
     io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, tx);
     // Display back the original UX
-    ui_idle();
+    showIdleUI();
     return 0; // do not redraw the widget
 }
 
@@ -296,7 +296,7 @@ static const bagl_element_t *io_seproxyhal_touch_deny(const bagl_element_t *e) {
     // Send back the response, do not restart the event loop
     io_exchange(CHANNEL_APDU | IO_RETURN_AFTER_TX, 2);
     // Display back the original UX
-    ui_idle();
+    showIdleUI();
     return 0; // do not redraw the widget
 }
 
@@ -324,6 +324,40 @@ unsigned short io_exchange_al(unsigned char channel, unsigned short tx_len) {
         THROW(INVALID_PARAMETER);
     }
     return 0;
+}
+
+const bagl_element_t * ui_verify_prepro(const bagl_element_t *element) {
+    if (element->component.userid > 0) {
+        unsigned int display = (ux_step == element->component.userid - 1);
+        if (display) {
+            switch (element->component.userid) {
+                case 1:
+                    UX_CALLBACK_SET_INTERVAL(2000);
+                    break;
+                case 2:
+                case 3:
+                case 4:
+                    UX_CALLBACK_SET_INTERVAL(MAX(
+                                                     3000, 1000 + bagl_label_roundtrip_duration_ms(element, 7)));
+                    break;
+            }
+        }
+        if (!display)
+            return NULL;
+    }
+    return element;
+}
+
+static void showIdleUI(void) {
+    uiState = UI_IDLE;
+    UX_MENU_DISPLAY(0, menu_main, NULL);
+}
+
+static void showVerifyUI(void) {
+    uiState = UI_APPROVAL;
+    ux_step = 0;
+    ux_step_count = 4;
+    UX_DISPLAY(ui_verify, ui_verify_prepro);
 }
 
 static void sample_main(void) {
@@ -371,6 +405,20 @@ static void sample_main(void) {
 
                     if (hashTainted) {
                         cx_sha256_init(&hash);
+                        if (G_io_apdu_buffer[4] < 176) { // Less than base transaction size
+                            THROW(ERR_NOT_LONG_ENOUGH);
+                        }
+
+                        // Get the basic tranasction information
+                        uint64_t recipient, fee, amount;
+                        os_memmove(&recipient, G_io_apdu_buffer + 5 + 40, 8);
+                        os_memmove(&amount, G_io_apdu_buffer + 5 + 48, 8);
+                        os_memmove(&fee, G_io_apdu_buffer + 5 + 56, 8);
+                        addressFromAccountNumber(signingContext.recipientRs, recipient, true);
+                        printAmount(amount, signingContext.transactionAmount,
+                                    sizeof(signingContext.transactionAmount));
+                        printAmount(fee, signingContext.feesAmount,
+                                    sizeof(signingContext.feesAmount));
                         hashTainted = 0;
                     }
 
@@ -383,8 +431,7 @@ static void sample_main(void) {
                         text_y = 60;
                         G_io_apdu_buffer[5 + G_io_apdu_buffer[4]] = '\0';
 
-                        display_text_part();
-                        ui_text();
+                        showVerifyUI();
 
                         flags |= IO_ASYNCH_REPLY;
                     } else {
@@ -438,41 +485,6 @@ void io_seproxyhal_display(const bagl_element_t *element) {
     io_seproxyhal_display_default((bagl_element_t *)element);
 }
 
-// Pick the text elements to display
-static unsigned char display_text_part() {
-    unsigned int i;
-    WIDE char *text = (char*) G_io_apdu_buffer + 5;
-    if (text[current_text_pos] == '\0') {
-        return 0;
-    }
-    i = 0;
-    while ((text[current_text_pos] != 0) && (text[current_text_pos] != '\n') &&
-           (i < MAX_CHARS_PER_LINE)) {
-        lineBuffer[i++] = text[current_text_pos];
-        current_text_pos++;
-    }
-    if (text[current_text_pos] == '\n') {
-        current_text_pos++;
-    }
-    lineBuffer[i] = '\0';
-    return 1;
-}
-
-static void ui_idle(void) {
-    uiState = UI_IDLE;
-    UX_MENU_DISPLAY(0, menu_main, NULL);
-}
-
-static void ui_text(void) {
-    uiState = UI_TEXT;
-    UX_DISPLAY(bagl_ui_text_review_nanos, NULL);
-}
-
-static void ui_approval(void) {
-    uiState = UI_APPROVAL;
-    UX_DISPLAY(bagl_ui_approval_nanos, NULL);
-}
-
 unsigned char io_event(unsigned char channel) {
     // nothing done with the event, throw an error on the transport layer if
     // needed
@@ -488,28 +500,14 @@ unsigned char io_event(unsigned char channel) {
         break;
 
     case SEPROXYHAL_TAG_DISPLAY_PROCESSED_EVENT:
-        if ((uiState == UI_TEXT) &&
-            (os_seph_features() &
-             SEPROXYHAL_TAG_SESSION_START_EVENT_FEATURE_SCREEN_BIG)) {
-            if (!display_text_part()) {
-                ui_approval();
-            } else {
-                UX_REDISPLAY();
-            }
-        } else {
-            UX_DISPLAYED_EVENT();
-        }
+        UX_DISPLAYED_EVENT();
         break;
 
     case SEPROXYHAL_TAG_TICKER_EVENT:
-        #ifdef TARGET_NANOS
-            UX_TICKER_EVENT(G_io_seproxyhal_spi_buffer, {
-                // defaulty retrig very soon (will be overriden during
-                // stepper_prepro)
-                UX_CALLBACK_SET_INTERVAL(500);
+        UX_TICKER_EVENT(G_io_seproxyhal_spi_buffer, {
+                ux_step = (ux_step + 1) % ux_step_count;
                 UX_REDISPLAY();
-            });
-        #endif 
+        });
         break;
 
     // unknown events are acknowledged
@@ -556,7 +554,7 @@ __attribute__((section(".boot"))) int main(void) {
             USB_power(0);
             USB_power(1);
 
-            ui_idle();
+            showIdleUI();
 
             sample_main();
         }

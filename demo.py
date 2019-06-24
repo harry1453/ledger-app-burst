@@ -39,8 +39,8 @@ print("publicKey " + str(codecs.encode(publicKey, "hex")))
 try:
     offset = 0
     while offset != len(textToSign):
-        if (len(textToSign) - offset) > 255: # if we cannot send everything that is left
-            chunk = textToSign[offset: offset + 255] # take next chunk
+        if (len(textToSign) - offset) > 510: # if we cannot send everything that is left
+            chunk = textToSign[offset: offset + 510] # take next chunk
         else: # we can send everything left
             chunk = textToSign[offset:] # take everything left
         if (offset + len(chunk)) == len(textToSign):
@@ -50,11 +50,14 @@ try:
         apdu = "8002"
         apdu += p1
         apdu += index
-        length = hex(len(chunk))[2:]
+        print("length is " + str(len(chunk)/2))
+        length = hex(int(len(chunk)/2))[2:]
         if len(length) % 2 == 1:
             length = "0" + length
         apdu += length
-        apdu += codecs.encode(chunk.encode("utf-8"), "hex").decode()
+        #apdu += codecs.encode(chunk.encode("utf-8"), "hex").decode()
+        apdu += chunk
+        print(apdu)
         signature = dongle.exchange(codecs.decode(apdu, "hex"))
         offset += len(chunk)
         if p1 == "80":
