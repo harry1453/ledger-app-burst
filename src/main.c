@@ -56,11 +56,6 @@ static void ui_approval(void);
 #define P1_MORE 0x00
 #define RESP_OK 0x4b
 
-// private key in flash. const and N_ variable name are mandatory here
-static const cx_ecfp_private_key_t N_privateKey;
-// initialization marker in flash. const and N_ variable name are mandatory here
-static const unsigned char N_initialized;
-
 static char lineBuffer[50];
 static cx_sha256_t hash;
 
@@ -75,7 +70,7 @@ typedef struct signingContext_t {
     unsigned char y[32];
 } messageSigningContext_t;
 
-messageSigningContext_t signingContext;
+static messageSigningContext_t signingContext;
 
 void getKeys() {
     if (!os_global_pin_is_validated()) {
@@ -102,17 +97,6 @@ void getKeys() {
 }
 
 static const bagl_element_t bagl_ui_idle_nanos[] = {
-    // {
-    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
-    //      bgcolor, font_id, icon_id},
-    //     text,
-    //     touch_area_brim,
-    //     overfgcolor,
-    //     overbgcolor,
-    //     tap,
-    //     out,
-    //     over,
-    // },
     {
         {BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000,
          0xFFFFFF, 0, 0},
@@ -162,17 +146,6 @@ bagl_ui_idle_nanos_button(unsigned int button_mask,
 }
 
 static const bagl_element_t bagl_ui_approval_nanos[] = {
-    // {
-    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
-    //      bgcolor, font_id, icon_id},
-    //     text,
-    //     touch_area_brim,
-    //     overfgcolor,
-    //     overbgcolor,
-    //     tap,
-    //     out,
-    //     over,
-    // },
     {
         {BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000,
          0xFFFFFF, 0, 0},
@@ -235,17 +208,6 @@ bagl_ui_approval_nanos_button(unsigned int button_mask,
 }
 
 static const bagl_element_t bagl_ui_text_review_nanos[] = {
-    // {
-    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
-    //      bgcolor, font_id, icon_id},
-    //     text,
-    //     touch_area_brim,
-    //     overfgcolor,
-    //     overbgcolor,
-    //     tap,
-    //     out,
-    //     over,
-    // },
     {
         {BAGL_RECTANGLE, 0x00, 0, 0, 128, 32, 0, 0, BAGL_FILL, 0x000000,
          0xFFFFFF, 0, 0},
@@ -627,20 +589,6 @@ __attribute__((section(".boot"))) int main(void) {
     BEGIN_TRY {
         TRY {
             io_seproxyhal_init();
-
-            // Create the private key if not initialized
-            if (N_initialized != 0x01) {
-                unsigned char canary;
-                cx_ecfp_private_key_t privateKey;
-                cx_ecfp_public_key_t publicKey;
-                cx_ecfp_generate_pair(CX_CURVE_256K1, &publicKey, &privateKey,
-                                      0);
-                nvm_write((void*) &N_privateKey, &privateKey,
-                          sizeof(privateKey));
-                canary = 0x01;
-                nvm_write((void*) &N_initialized, &canary, sizeof(canary));
-            }
-
 #ifdef LISTEN_BLE
             if (os_seph_features() &
                 SEPROXYHAL_TAG_SESSION_START_EVENT_FEATURE_BLE) {
