@@ -126,9 +126,12 @@ static void printAmount(uint64_t amount, unsigned char *out, uint8_t len) {
     }
     j += 2;
 
-    // strip trailing .
-    //if (out[j-1] == '.') j -= 1;
-
+    out[j++] = ' ';
+    out[j++] = 'B';
+    out[j++] = 'U';
+    out[j++] = 'R';
+    out[j++] = 'S';
+    out[j++] = 'T';
     out[j] = '\0';
 }
 
