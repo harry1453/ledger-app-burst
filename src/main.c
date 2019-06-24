@@ -101,129 +101,6 @@ void getKeys() {
     keygen25519(signingContext.publicKey, signingContext.sharedKey, signingContext.privateKey);
 }
 
-#ifdef TARGET_BLUE
-
-// UI to approve or deny the signature proposal
-static const bagl_element_t const bagl_ui_approval_blue[] = {
-    // {
-    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
-    //      bgcolor, font_id, icon_id},
-    //     text,
-    //     touch_area_brim,
-    //     overfgcolor,
-    //     overbgcolor,
-    //     tap,
-    //     out,
-    //     over,
-    // },
-    {
-        {BAGL_BUTTON | BAGL_FLAG_TOUCHABLE, 0x00, 190, 215, 120, 40, 0, 6,
-         BAGL_FILL, 0x41ccb4, 0xF9F9F9, BAGL_FONT_OPEN_SANS_LIGHT_14px |
-         BAGL_FONT_ALIGNMENT_CENTER | BAGL_FONT_ALIGNMENT_MIDDLE, 0},
-        "Deny",
-        0,
-        0x37ae99,
-        0xF9F9F9,
-        io_seproxyhal_touch_deny,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_BUTTON | BAGL_FLAG_TOUCHABLE, 0x00, 190, 265, 120, 40, 0, 6,
-         BAGL_FILL, 0x41ccb4, 0xF9F9F9, BAGL_FONT_OPEN_SANS_LIGHT_14px |
-         BAGL_FONT_ALIGNMENT_CENTER | BAGL_FONT_ALIGNMENT_MIDDLE, 0},
-        "Approve",
-        0,
-        0x37ae99,
-        0xF9F9F9,
-        io_seproxyhal_touch_approve,
-        NULL,
-        NULL,
-    },
-};
-
-static unsigned int
-bagl_ui_approval_blue_button(unsigned int button_mask,
-                             unsigned int button_mask_counter) {
-    return 0;
-}
-
-// UI displayed when no signature proposal has been received
-static const bagl_element_t bagl_ui_idle_blue[] = {
-    // {
-    //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
-    //      bgcolor, font_id, icon_id},
-    //     text,
-    //     touch_area_brim,
-    //     overfgcolor,
-    //     overbgcolor,
-    //     tap,
-    //     out,
-    //     over,
-    // },
-    {
-        {BAGL_RECTANGLE, 0x00, 0, 60, 320, 420, 0, 0, BAGL_FILL, 0xf9f9f9,
-         0xf9f9f9, 0, 0},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_RECTANGLE, 0x00, 0, 0, 320, 60, 0, 0, BAGL_FILL, 0x1d2028,
-         0x1d2028, 0, 0},
-        NULL,
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_LABEL, 0x00, 20, 0, 320, 60, 0, 0, BAGL_FILL, 0xFFFFFF, 0x1d2028,
-         BAGL_FONT_OPEN_SANS_LIGHT_14px | BAGL_FONT_ALIGNMENT_MIDDLE, 0},
-        "Sample Sign",
-        0,
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-    },
-    {
-        {BAGL_BUTTON | BAGL_FLAG_TOUCHABLE, 0x00, 190, 215, 120, 40, 0, 6,
-         BAGL_FILL, 0x41ccb4, 0xF9F9F9, BAGL_FONT_OPEN_SANS_LIGHT_14px |
-         BAGL_FONT_ALIGNMENT_CENTER | BAGL_FONT_ALIGNMENT_MIDDLE, 0},
-        "Exit",
-        0,
-        0x37ae99,
-        0xF9F9F9,
-        io_seproxyhal_touch_exit,
-        NULL,
-        NULL,
-    },
-};
-
-static unsigned int
-bagl_ui_idle_blue_button(unsigned int button_mask,
-                         unsigned int button_mask_counter) {
-    return 0;
-}
-
-static bagl_element_t bagl_ui_text[1];
-
-static unsigned int
-bagl_ui_text_button(unsigned int button_mask,
-                    unsigned int button_mask_counter) {
-    return 0;
-}
-
-#else
-
 static const bagl_element_t bagl_ui_idle_nanos[] = {
     // {
     //     {type, userid, x, y, width, height, stroke, radius, fill, fgcolor,
@@ -661,48 +538,22 @@ static unsigned char display_text_part() {
         current_text_pos++;
     }
     lineBuffer[i] = '\0';
-#ifdef TARGET_BLUE
-    os_memset(bagl_ui_text, 0, sizeof(bagl_ui_text));
-    bagl_ui_text[0].component.type = BAGL_LABEL;
-    bagl_ui_text[0].component.x = 4;
-    bagl_ui_text[0].component.y = text_y;
-    bagl_ui_text[0].component.width = 320;
-    bagl_ui_text[0].component.height = TEXT_HEIGHT;
-    // element.component.fill = BAGL_FILL;
-    bagl_ui_text[0].component.fgcolor = 0x000000;
-    bagl_ui_text[0].component.bgcolor = 0xf9f9f9;
-    bagl_ui_text[0].component.font_id = DEFAULT_FONT;
-    bagl_ui_text[0].text = lineBuffer;
-    text_y += TEXT_HEIGHT + TEXT_SPACE;
-#endif
     return 1;
 }
 
 static void ui_idle(void) {
     uiState = UI_IDLE;
-#ifdef TARGET_BLUE
-    UX_DISPLAY(bagl_ui_idle_blue, NULL);
-#else
     UX_DISPLAY(bagl_ui_idle_nanos, NULL);
-#endif
 }
 
 static void ui_text(void) {
     uiState = UI_TEXT;
-#ifdef TARGET_BLUE
-    UX_DISPLAY(bagl_ui_text, NULL);
-#else
     UX_DISPLAY(bagl_ui_text_review_nanos, NULL);
-#endif
 }
 
 static void ui_approval(void) {
     uiState = UI_APPROVAL;
-#ifdef TARGET_BLUE
-    UX_DISPLAY(bagl_ui_approval_blue, NULL);
-#else
     UX_DISPLAY(bagl_ui_approval_nanos, NULL);
-#endif
 }
 
 unsigned char io_event(unsigned char channel) {
