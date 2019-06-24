@@ -17,12 +17,12 @@
 
 #include "os.h"
 #include "cx.h"
-#include "curve25519_i64.h"
+#include "curve/curve25519_i64.h"
 
 #include "os_io_seproxyhal.h"
-#include "rs_address.h"
+#include "rs/rs_address.h"
 
-#include "glyphs.h"
+#include "glyphs/glyphs.h"
 
 unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 
