@@ -22,6 +22,8 @@
 #include "os_io_seproxyhal.h"
 #include "rs_address.h"
 
+#include "glyphs.h"
+
 unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 
 static unsigned int current_text_pos; // parsing cursor in the text to display
@@ -135,10 +137,10 @@ static void printAmount(uint64_t amount, unsigned char *out, uint8_t len) {
     out[j] = '\0';
 }
 
-const ux_menu_entry_t menu_main[] = { // TODO glyphs
-        {NULL, NULL, 0, NULL, "Use wallet to", "view accounts", 33, 12},
+const ux_menu_entry_t menu_main[] = {
+        {NULL, NULL, 0, &C_icon_burst, "Use wallet to", "view accounts", 33, 12},
         {NULL, NULL, 0, NULL, "Version", APPVERSION, 0, 0},
-        {NULL, os_sched_exit, 0, NULL, "Quit app", NULL, 50, 29},
+        {NULL, os_sched_exit, 0, &C_icon_dashboard, "Quit app", NULL, 50, 29},
         UX_MENU_END};
 
 const bagl_element_t ui_verify[] = {
