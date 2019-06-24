@@ -4,6 +4,8 @@ project(ledger_app_burst C)
 set(CMAKE_C_STANDARD 11)
 
 add_executable(ledger_app_burst
-        src/main.c)
+        src/main.c
+        src/curve25519_i64.c
+        src/curve25519_i64.h)
 
 include_directories("C:/Users/Harry/Ubuntu/BOLOS_SDK/include")
