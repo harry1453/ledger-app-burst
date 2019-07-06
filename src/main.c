@@ -261,7 +261,7 @@ io_seproxyhal_touch_approve(const bagl_element_t *e) {
         // Get x = hash(m, s)
         cx_sha256_init(&hash);
         cx_hash(&hash.header, 0, signingContext.m, 32, NULL, 0);
-        cx_hash(&hash.header, CX_LAST, signingContext.m, 32, signingContext.x, 32);
+        cx_hash(&hash.header, CX_LAST, signingContext.sharedKey, 32, signingContext.x, 32);
 
         // get y through keygen25519(y, NULL, x);
         keygen25519(signingContext.y, NULL, signingContext.x);
