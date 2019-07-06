@@ -66,6 +66,8 @@ static int ux_step_count;
 
 static messageSigningContext_t signingContext;
 
+// TODO nvram storage of last used key
+
 void getKeys() {
     if (!os_global_pin_is_validated()) {
         return;

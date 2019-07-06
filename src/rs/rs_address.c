@@ -22,6 +22,7 @@
 #include "cx.h"
 
 #define PREFIX "BURST-"
+#define ZERO_ACCOUNT "None Set"
 
 static const uint8_t gexp[] = {1, 2, 4, 8, 16, 5, 10, 20, 13, 26, 17, 7, 14, 28, 29, 31, 27, 19, 3, 6, 12, 24, 21, 15, 30, 25, 23, 11, 22, 9, 18, 1};
 static const uint8_t glog[] = {0, 0, 1, 18, 2, 5, 19, 11, 3, 29, 6, 27, 20, 8, 12, 23, 4, 10, 30, 17, 7, 22, 28, 26, 21, 25, 9, 16, 13, 14, 24, 15};
@@ -37,6 +38,10 @@ uint8_t gmult(uint8_t a, uint8_t b) {
 }
 
 bool addressFromAccountNumber(unsigned char* address, uint64_t account, bool prefix) {
+    if (account == 0) {
+        os_memmove(address, ZERO_ACCOUNT, sizeof(ZERO_ACCOUNT)); // TODO test
+        address[sizeof(ZERO_ACCOUNT)] = '\0';
+    }
 
     uint8_t codeword[17];
 	os_memset(codeword, 0, 17);
